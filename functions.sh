@@ -200,7 +200,7 @@ function git_remote_set_url {
 function git_clone_and_cd {
     local project=$1
     local short_project=$2
-    local git_base=${GIT_BASE:-https://git.openstack.org}
+    local git_base=$3
 
     if [[ ! -e $short_project ]]; then
         echo "  Need to clone $short_project"
@@ -279,19 +279,31 @@ function fix_disk_layout {
 #   The tip of the indicated branch
 #   The tip of the master branch
 #
+# If you would like to use a particular git base other than GIT_BASE or
+# https://git.openstack.org for a project, for example in order to use
+# a particular repositories for a third party CI, then supply that using
+# variable OVERRIDE_${PROJECT}_GIT_BASE instead.
+# (e.g. OVERRIDE_TEMPEST_GIT_BASE=http://foo.bar.com)
+#
 function setup_project {
     local project=$1
     local branch=$2
     local short_project=`basename $project`
     local git_base=${GIT_BASE:-https://git.openstack.org}
+    # allow for possible git_base override
+    local uc_project=`echo $short_project | tr [:lower:] [:upper:] | tr '-' '_' | sed 's/[^A-Z_]//'`
+    local project_git_base_var="\$OVERRIDE_${uc_project}_GIT_BASE"
+    local project_git_base=`eval echo ${project_git_base_var}`
+    if [[ "$project_git_base" != "" ]]; then
+        git_base=$project_git_base
+    fi
 
     echo "Setting up $project @ $branch"
-    git_clone_and_cd $project $short_project
+    git_clone_and_cd $project $short_project $git_base
 
     git_remote_set_url origin $git_base/$project
 
     # allow for possible project branch override
-    local uc_project=`echo $short_project | tr [:lower:] [:upper:] | tr '-' '_' | sed 's/[^A-Z_]//'`
     local project_branch_var="\$OVERRIDE_${uc_project}_PROJECT_BRANCH"
     local project_branch=`eval echo ${project_branch_var}`
     if [[ "$project_branch" != "" ]]; then

@@ -20,6 +20,8 @@
 
 source functions.sh
 
+LOCAL_AAR_VARS="TEST_GIT_CHECKOUTS TEST_ZUUL_REFS GIT_CLONE_AND_CD_ARG"
+
 # Mock out the checkout function since the refs we're checking out do
 # not exist.
 function git_checkout {
@@ -84,6 +86,12 @@ function git_remote_set_url {
 }
 
 function git_clone_and_cd {
+    if [[ "x${2}" == "x" ]]; then
+        GIT_CLONE_AND_CD_ARG["ERROR"]="ERROR"
+        return 1
+    else
+        GIT_CLONE_AND_CD_ARG[$2]="$1,$3"
+    fi
     return 0
 }
 
@@ -112,8 +120,9 @@ function assert_raises {
 # Tests follow:
 function test_one_on_master {
     # devstack-gate  master  ZA
-    declare -A TEST_GIT_CHECKOUTS
-    declare -A TEST_ZUUL_REFS
+    for aar_var in $LOCAL_AAR_VARS; do
+        eval `echo "declare -A $aar_var"`
+    done
     local ZUUL_PROJECT='openstack-infra/devstack-gate'
     local ZUUL_BRANCH='master'
     local ZUUL_REF='refs/zuul/master/ZA'
@@ -127,8 +136,9 @@ function test_one_on_master {
 function test_two_on_master {
     # devstack-gate  master  ZA
     # glance         master  ZB
-    declare -A TEST_GIT_CHECKOUTS
-    declare -A TEST_ZUUL_REFS
+    for aar_var in $LOCAL_AAR_VARS; do
+        eval `echo "declare -A $aar_var"`
+    done
     local ZUUL_PROJECT='openstack/glance'
     local ZUUL_BRANCH='master'
     local ZUUL_REF='refs/zuul/master/ZB'
@@ -147,8 +157,9 @@ function test_multi_branch_on_master {
     # devstack-gate        master         ZA
     # glance               stable/havana  ZB
     # python-glanceclient  master         ZC
-    declare -A TEST_GIT_CHECKOUTS
-    declare -A TEST_ZUUL_REFS
+    for aar_var in $LOCAL_AAR_VARS; do
+        eval `echo "declare -A $aar_var"`
+    done
     local ZUUL_PROJECT='openstack/python-glanceclient'
     local ZUUL_BRANCH='master'
     local ZUUL_REF='refs/zuul/master/ZC'
@@ -177,8 +188,9 @@ function test_multi_branch_project_override {
     # tempest              not in queue (override to master)
     # oslo.config          not in queue (master because no stable/havana branch)
     # nova                 not in queue (stable/havana)
-    declare -A TEST_GIT_CHECKOUTS
-    declare -A TEST_ZUUL_REFS
+    for aar_var in $LOCAL_AAR_VARS; do
+        eval `echo "declare -A $aar_var"`
+    done
     local ZUUL_PROJECT='openstack/glance'
     local ZUUL_BRANCH='stable/havana'
     local OVERRIDE_TEMPEST_PROJECT_BRANCH='master'
@@ -210,8 +222,9 @@ function test_multi_branch_on_stable {
     # devstack-gate        master         ZA
     # glance               stable/havana  ZB
     # python-glanceclient not in queue
-    declare -A TEST_GIT_CHECKOUTS
-    declare -A TEST_ZUUL_REFS
+    for aar_var in $LOCAL_AAR_VARS; do
+        eval `echo "declare -A $aar_var"`
+    done
     local ZUUL_PROJECT='openstack/glance'
     local ZUUL_BRANCH='stable/havana'
     local ZUUL_REF='refs/zuul/stable/havana/ZB'
@@ -228,6 +241,36 @@ function test_multi_branch_on_stable {
     assert_equal "${TEST_GIT_CHECKOUTS[python-glanceclient]}" 'master'
 }
 
+function test_multi_git_base_project_override {
+    # osrg/ryu              https://github.com
+    # test/devstack-gate    https://foo.bar.com
+    # openstack/keystone    https://git.openstack.org
+    # openstack/glance      http://tarballs.openstack.org
+    for aar_var in $LOCAL_AAR_VARS; do
+        eval `echo "declare -A $aar_var"`
+    done
+    GIT_CLONE_AND_CD_ARG["ERROR"]="NULL"
+    local ZUUL_PROJECT='openstack/neutron'
+    local ZUUL_BRANCH='master'
+    local ZUUL_REF='refs/zuul/master/ZA'
+    local GIT_BASE=""
+    local GIT_BASE_DEF="https://git.openstack.org"
+
+    local OVERRIDE_RYU_GIT_BASE='https://github.com'
+    setup_project "osrg/ryu" $ZUUL_BRANCH
+    local OVERRIDE_DEVSTACK_GATE_GIT_BASE='https://foo.bar.com'
+    setup_project "test/devstack-gate" $ZUUL_BRANCH
+    setup_project "openstack/keystone" $ZUUL_BRANCH
+    local GIT_BASE="http://tarballs.openstack.org"
+    setup_project "openstack/glance" $ZUUL_BRANCH
+
+    assert_equal "${GIT_CLONE_AND_CD_ARG["ryu"]}" "osrg/ryu,$OVERRIDE_RYU_GIT_BASE"
+    assert_equal "${GIT_CLONE_AND_CD_ARG["devstack-gate"]}" "test/devstack-gate,$OVERRIDE_DEVSTACK_GATE_GIT_BASE"
+    assert_equal "${GIT_CLONE_AND_CD_ARG["keystone"]}" "openstack/keystone,$GIT_BASE_DEF"
+    assert_equal "${GIT_CLONE_AND_CD_ARG["glance"]}" "openstack/glance,$GIT_BASE"
+    assert_equal "${GIT_CLONE_AND_CD_ARG["ERROR"]}" "NULL"
+}
+
 function test_grenade_backward {
     # devstack-gate        master         ZA
     # nova                 stable/havana  ZB
@@ -238,8 +281,9 @@ function test_grenade_backward {
     # python-glanceclient not in queue
     # havana -> master (with changes)
 
-    declare -A TEST_GIT_CHECKOUTS
-    declare -A TEST_ZUUL_REFS
+    for aar_var in $LOCAL_AAR_VARS; do
+        eval `echo "declare -A $aar_var"`
+    done
     local ZUUL_PROJECT='openstack/glance'
     local ZUUL_BRANCH='master'
     local ZUUL_REF='refs/zuul/master/ZE'
@@ -302,8 +346,9 @@ function test_grenade_forward {
     # python-glanceclient not in queue
     # havana (with changes) -> master
 
-    declare -A TEST_GIT_CHECKOUTS
-    declare -A TEST_ZUUL_REFS
+    for aar_var in $LOCAL_AAR_VARS; do
+        eval `echo "declare -A $aar_var"`
+    done
     local ZUUL_PROJECT='openstack/glance'
     local ZUUL_BRANCH='stable/havana'
     local ZUUL_REF='refs/zuul/stable/havana/ZE'
@@ -362,8 +407,9 @@ function test_branch_override {
     # swift not in queue
     # python-glanceclient not in queue
 
-    declare -A TEST_GIT_CHECKOUTS
-    declare -A TEST_ZUUL_REFS
+    for aar_var in $LOCAL_AAR_VARS; do
+        eval `echo "declare -A $aar_var"`
+    done
     local ZUUL_PROJECT='openstack-infra/devstack-gate'
     local ZUUL_BRANCH='master'
     local ZUUL_REF='refs/zuul/master/ZB'
@@ -386,8 +432,9 @@ function test_branch_override {
 function test_periodic {
     # No queue
 
-    declare -A TEST_GIT_CHECKOUTS
-    declare -A TEST_ZUUL_REFS
+    for aar_var in $LOCAL_AAR_VARS; do
+        eval `echo "declare -A $aar_var"`
+    done
     local ZUUL_BRANCH='stable/havana'
     local ZUUL_PROJECT='openstack/glance'
 
@@ -409,6 +456,7 @@ test_grenade_forward
 test_multi_branch_on_master
 test_multi_branch_on_stable
 test_multi_branch_project_override
+test_multi_git_base_project_override
 test_one_on_master
 test_periodic
 test_two_on_master
